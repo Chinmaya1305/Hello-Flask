@@ -1,3 +1,4 @@
+cat > Jenkinsfile <<'JENFILE'
 pipeline {
   agent any
   environment {
@@ -42,7 +43,8 @@ pipeline {
         sh '''
           . ${VENV_DIR}/bin/activate
           mkdir -p reports
-          pytest --maxfail=1 --disable-warnings -q --junitxml=reports/junit.xml
+          # ensure pytest can import app by adding workspace root to PYTHONPATH
+          PYTHONPATH=. pytest --maxfail=1 --disable-warnings -q --junitxml=reports/junit.xml
         '''
       }
       post {
@@ -78,4 +80,5 @@ pipeline {
     }
   }
 }
+JENFILE
 
