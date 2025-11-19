@@ -1,84 +1,46 @@
-cat > Jenkinsfile <<'JENFILE'
 pipeline {
-  agent any
-  environment {
-    ARTIFACTS_PATH = "dist/*.tar.gz"
-    VENV_DIR = "venv"
-  }
-  options {
-    timeout(time: 30, unit: 'MINUTES')
-  }
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
-    }
+    agent any
 
-    stage('Setup venv') {
-      steps {
-        sh '''
-          # create venv if missing
-          python3 -m venv ${VENV_DIR}
-          # ensure pip is available from venv
-          . ${VENV_DIR}/bin/activate
-          python -m pip install --upgrade pip setuptools wheel
-          pip --version
-        '''
-      }
-    }
-
-    stage('Install deps') {
-      steps {
-        sh '''
-          . ${VENV_DIR}/bin/activate
-          # install into venv (no system packages touched)
-          pip install -r requirements.txt
-        '''
-      }
-    }
-
-    stage('Unit tests') {
-      steps {
-        sh '''
-          . ${VENV_DIR}/bin/activate
-          mkdir -p reports
-          # ensure pytest can import app by adding workspace root to PYTHONPATH
-          PYTHONPATH=. pytest --maxfail=1 --disable-warnings -q --junitxml=reports/junit.xml
-        '''
-      }
-      post {
-        always {
-          junit 'reports/junit.xml'
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
-    }
 
-    stage('Package') {
-      steps {
-        sh '''
-          . ${VENV_DIR}/bin/activate
-          chmod +x package.sh
-          ./package.sh
-        '''
-      }
-    }
+        stage('Setup Python') {
+            steps {
+                sh '''
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
+                '''
+            }
+        }
 
-    stage('Archive') {
-      steps {
-        archiveArtifacts artifacts: "${ARTIFACTS_PATH}", fingerprint: true
-      }
-    }
-  }
+        stage('Run Tests') {
+            steps {
+                sh '''
+                    . venv/bin/activate
+                    pytest -q
+                '''
+            }
+        }
 
-  post {
-    success {
-      echo "Pipeline succeeded: build ${env.BUILD_NUMBER}"
+        stage('Package') {
+            steps {
+                sh '''
+                    mkdir -p dist
+                    zip -r dist/hello-flask-${BUILD_NUMBER}.zip app.py requirements.txt
+                '''
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: 'dist/*.zip', fingerprint: true
+            }
+        }
     }
-    failure {
-      echo "Pipeline failed: build ${env.BUILD_NUMBER}"
-    }
-  }
 }
-JENFILE
-
